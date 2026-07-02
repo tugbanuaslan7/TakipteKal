@@ -94,7 +94,7 @@ lib/
 Flutter ve Dart SDK'nın kurulu olduğunu varsayıyoruz.
 
 ```bash
-git clone https://github.com/tugbanuraslan/takipte-kal.git
+git clone https://github.com/tugbanuraslan/TakipteKal.git
 cd takipte-kal
 flutter pub get
 ```
