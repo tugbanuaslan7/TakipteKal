@@ -1,113 +1,129 @@
-# Takipte Kal
+# Takipte Kal — Dinamik Rota Takipli Mobil Navigasyon Sistemi
 
-Takipte Kal, bir grup insanın aynı rotada birlikte hareket etmesini sağlayan, gerçek zamanlı takip ve sesli navigasyon odaklı bir mobil uygulamadır. Fikir basit ama ihtiyaç gerçek: bir rehber gruba yol gösterirken, takipçilerin telefona bakıp "şimdi nereye dönüyoruz?" diye sormaması gerekiyor.
+Lider bir sürücünün gerçek zamanlı olarak oluşturduğu güzergâhı, takipçilere anlık konum paylaşımı ve sesli navigasyonla aktaran bir Flutter mobil uygulaması.
 
-Uygulama lider-takipçi mimarisi üzerine kurulu. Lider rotayı başlatır, GPS koordinatları Firebase üzerinden anlık olarak akar, takipçiler ise Mapbox üzerinden adım adım navigasyon ve sesli yönlendirme alır.
+## İçindekiler
 
-Yalova Üniversitesi Bilgisayar Mühendisliği bitirme projesi olarak geliştirilmiştir.
+- [Proje Hakkında](#proje-hakkında)
+- [Özellikler](#özellikler)
+- [Mimari](#mimari)
+- [Kullanılan Teknolojiler](#kullanılan-teknolojiler)
+- [Sistem Akışı](#sistem-akışı)
+- [Veritabanı Yapısı](#veritabanı-yapısı)
+- [Sesli Navigasyon Motoru](#sesli-navigasyon-motoru)
+- [Kurulum](#kurulum)
 
----
+## Proje Hakkında
 
-## Nasıl Çalışır
+Grup hâlinde yapılan yolculuklarda (örneğin konvoy sürüşü, motosiklet grupları, aile/arkadaş seyahatleri) sık karşılaşılan bir ihtiyaçtan yola çıkılmıştır: lider bir sürücü navigasyondan bağımsız olarak kendi rotasını oluştururken, takipçi araçların bu rotayı gerçek zamanlı olarak takip edip sesli yönlendirme alabilmesi.
 
-Uygulamada iki farklı kullanıcı rolü var.
+Mevcut uygulamalar bu ihtiyacı tam karşılamamaktadır:
+- **Navigasyon uygulamaları** (Google Maps vb.) yalnızca sabit bir hedefe rota üretir.
+- **Konum paylaşım uygulamaları** (Life360 vb.) yalnızca anlık konumu gösterir, navigasyon desteği sunmaz.
+- **Grup sürüş uygulamaları** (REVER, RISER, Strava vb.) grup konumu ve bazı durumlarda navigasyon sunar, ancak liderin *anlık oluşturduğu* rotayı takipçiye gerçek zamanlı aktarmaz.
 
-**Lider** rotayı başlatan kişidir. GPS konumu arka planda Firebase Firestore'a yazılır ve haritada tüm takipçilerin anlık konumu görünür. Gruba üç farklı şekilde katılım sağlanabilir: lider bir katılım kodu üretip paylaşabilir, QR kod oluşturup okutabilir ya da rehberinde kayıtlı kişileri doğrudan gruba ekleyebilir.
+Bu proje, liderin ürettiği rotayı canlı olarak takipçiye ileten ve bu rotayı sesli navigasyona dönüştüren bütünleşik bir sistem sunar.
 
-**Takipçi** bu yöntemlerden biriyle gruba dahil olur. Katılım kodu varsa ekrana manuel girer, QR kod varsa okuttur. Gruba bağlandıktan sonra liderin rotasını alır, Mapbox Directions API üzerinden kendi cihazında adım adım navigasyon oluşturur ve sesli yönlendirme eşliğinde ilerler. Haritada hem liderin hem de diğer takipçilerin konumu anlık olarak görünür.
+## Özellikler
 
-Gruba geç katılan biri varsa bootstrap flush mekanizması devreye girer: o ana kadar Firestore'a yazılmış tüm rota noktaları toplu olarak çekilir, takipçi rotanın en başından değil mevcut konuma en yakın noktadan navigasyona devam eder.
+- **Gerçek zamanlı rota paylaşımı** — Lider hareket ettikçe ürettiği konum noktaları anlık olarak takipçilere iletilir.
+- **Sesli navigasyon** — Türkçe, üç aşamalı (hazırlık / yaklaşma / son uyarı) hıza duyarlı sesli yönlendirme.
+- **Çoklu katılım yöntemi** — Oturum kodu, QR kod veya rehber üzerinden davet ile oturuma katılım.
+- **Oturum yönetimi** — Lider tarafında canlı rota, hız/süre/mesafe bilgisi ve takipçi durumu takibi.
+- **Rota kaydetme** — Takip edilen rotaların kaydedilip daha sonra yeniden kullanılabilmesi.
+- **GPS drift filtreleme** — Sahte konum sıçramalarının otomatik olarak ayıklanması.
+- **Telefon doğrulamalı kayıt** — OTP tabanlı hesap doğrulama ve rehber üzerinden kullanıcı eşleştirme.
 
----
+## Mimari
 
-## Navigasyon Motoru
-
-Uygulamanın en kritik parçası `NavigationGuidanceEngine`. OsmAnd'ın açık kaynak navigasyon algoritmasından ilham alınarak Flutter'a uyarlandı.
-
-Sesli duyurular üç aşamada çalışır:
-
-| Aşama     | Ne zaman tetiklenir                        |
-|-----------|--------------------------------------------|
-| `PREPARE` | Manevra henüz uzakta, önceden haber verir  |
-| `TURN_IN` | Manevra yaklaşıyor                         |
-| `TURN_NOW`| Tam o an                                   |
-
-Mesafe eşikleri hıza göre adaptif olarak ölçeklenir — yavaş yürürken ile araçla giderken aynı eşikler işe yaramaz.
-
-Mapbox'ın windowed (pencereli) navigasyon mimarisi korundu. Tek seferlik tam rota çekme yaklaşımına geçilmedi; bu tercih bilinçli ve tasarımın temelinde yatıyor.
-
----
-
-## Teknolojiler
-
-| Katman               | Teknoloji                  |
-|----------------------|----------------------------|
-| Mobil Framework      | Flutter / Dart             |
-| Harita               | Mapbox Maps SDK            |
-| Navigasyon           | Mapbox Directions API      |
-| Gerçek Zamanlı Veri  | Firebase Firestore         |
-| Kimlik Doğrulama     | Firebase Authentication    |
-| Sesli Yönlendirme    | Flutter TTS                |
-| Konum                | Geolocator                 |
-| Ayarlar              | SharedPreferences          |
-
----
-
-## Veri Mimarisi
+Sistem üç ana bileşenden oluşur:
 
 ```
-routes/
-  {routeId}/
-    points/              — Liderin GPS koordinatları, anlık olarak yazılır
-
-users/
-  {uid}/
-    savedRoutes/         — Kullanıcıya ait kayıtlı rota referansları
+Lider Cihaz  →  Cloud Firestore  →  Takipçi Cihaz
+ (GPS + Firestore)   (merkezi         (Veri katmanı + Navigasyon katmanı)
+                      haberleşme)
 ```
 
----
+**Lider tarafı:** GPS noktalarını üretir, drift filtresinden geçirir ve Firestore'a yazar.
 
-## Proje Yapısı
+**Firestore:** Lider ve takipçi arasındaki tüm iletişim buradan geçer; taraflar birbiriyle doğrudan konuşmaz.
 
-```
-lib/
-├── main.dart
-├── config/
-│   └── app_config.dart                    — SharedPreferences ile uygulama ayarları
-├── screens/
-│   ├── login_screen.dart
-│   ├── profile_screen.dart
-│   ├── leader_screen.dart
-│   ├── follower_screen.dart
-│   └── follower_enter_code_screen.dart
-├── services/
-│   ├── navigation_guidance_engine.dart    — Yönlendirme motoru
-│   ├── simulation_service.dart            — GPS simülasyonu
-│   └── firestore_service.dart
-└── widgets/
-```
+**Takipçi tarafı** iki alt katmana ayrılır:
+- *Veri katmanı* (`FollowerService`) — Firestore'u dinler, geçmiş ve canlı noktaları senkronize eder, tamponlar.
+- *Navigasyon katmanı* (`MapboxService` + `NavigationGuidanceEngine`) — koordinatları manevralara çevirir, filtreler ve sesli uyarı üretir.
 
----
+`FollowerScreen` bu iki katmanı orkestra ederek haritayı, kamerayı ve TTS'i yönetir.
+
+## Kullanılan Teknolojiler
+
+| Katman | Teknoloji |
+|---|---|
+| Mobil geliştirme | Flutter, Dart |
+| Kimlik doğrulama | Firebase Auth (telefon OTP + e-posta) |
+| Veritabanı | Cloud Firestore (NoSQL) |
+| Harita görselleştirme | Google Maps SDK |
+| Rota ve manevra üretimi | Mapbox Directions API |
+| Sesli yönlendirme | Flutter TTS (tr-TR) |
+| Konum servisleri | Geolocator |
+
+## Sistem Akışı
+
+1. **Oturum başlatma** — Lider yeni bir takip oturumu başlatır; bu işlem veritabanında bir rota belgesi oluşturur ve bir oturum kodu üretir.
+2. **Konum üretimi** — Lider hareket ettikçe ürettiği konum noktaları (enlem, boylam, hız, yönelim, sunucu zaman damgası) GPS drift filtresinden geçirilerek Firestore'a yazılır.
+3. **Gerçek zamanlı dinleme** — Takipçi, Firestore'un snapshot mekanizmasıyla yeni noktaları anlık olarak alır; noktalar tamponlanıp gruplar hâlinde görünür rotaya eklenir.
+4. **Manevra üretimi** — Takipçinin konumuna göre güzergâhın ilgili bölümü (en fazla 25 nokta, kayan pencere yaklaşımıyla) Mapbox Directions API'ye gönderilir.
+5. **Standartlaştırma ve filtreleme** — Mapbox'ın döndürdüğü ham manevra türleri, uygulamanın kendi tanımladığı standart manevra kümesine eşlenir; gereksiz/tekrarlı adımlar ayıklanır.
+6. **Sesli yönlendirme** — Filtrelenen manevralar, hıza duyarlı üç aşamalı bir sistemle (hazırlık → yaklaşma → son uyarı) Türkçe olarak seslendirilir.
+7. **Oturum sonu** — Lider oturumu sonlandırdığında rota belgesi pasif hâle gelir; takipçinin izlediği güzergâh isteğe bağlı olarak kalıcı biçimde kaydedilebilir.
+
+## Veritabanı Yapısı
+
+Cloud Firestore üzerinde 5 koleksiyon bulunur:
+
+| Koleksiyon | Açıklama |
+|---|---|
+| `users` | Sisteme kayıtlı kullanıcı bilgileri |
+| `rotalar` | Lider kullanıcıların oluşturduğu oturumlar |
+| `rotalar/{id}/rota_noktalari` | Oturuma ait konum noktaları (alt koleksiyon) |
+| `rotalar/{id}/katilimcilar` | Oturuma katılan takipçiler (alt koleksiyon) |
+| `saved_routes` | Kullanıcıların kalıcı olarak kaydettiği rotalar (kök koleksiyon) |
+
+Tasarım ilkesi: oturuma bağlı, geçici veri alt koleksiyonlarda; uzun ömürlü kullanıcı verisi kök koleksiyonlarda tutulur.
+
+## Sesli Navigasyon Motoru
+
+`NavigationGuidanceEngine`, OsmAnd'ın açık kaynaklı sesli yönlendirme algoritmasından uyarlanmıştır ([referans](https://osmand.net/docs/technical/algorithms/voice-prompt-triggering/)).
+
+Üç aşamalı uyarı sistemi:
+
+| Aşama | Ne zaman | Süre katsayısı |
+|---|---|---|
+| Hazırlık (Prepare) | Manevradan çok önce, yalnızca büyük manevralarda | 115 sn × varsayılan hız |
+| Yaklaşma (Advance) | Manevraya yakın mesafede | 22 sn × gerçek hız |
+| Son uyarı (Near) | Tam manevra anında, mesafesiz | Dinamik (hız ve adım uzunluğuna göre) |
+
+Uyarı mesafeleri sabit değildir; sürücünün anlık hızına göre ölçeklenir. Ayrıca aynı uyarının tekrar edilmesini önleyen (stage-lock, cooldown, GPS geri sıçraması tespiti) çeşitli denetimler bulunur.
 
 ## Kurulum
 
-Flutter ve Dart SDK'nın kurulu olduğunu varsayıyoruz.
-
 ```bash
-git clone https://github.com/tugbanuraslan/TakipteKal.git
+# Depoyu klonlayın
+git clone <repo-url>
 cd takipte-kal
+
+# Bağımlılıkları yükleyin
 flutter pub get
-```
 
-Firebase için `google-services.json` (Android) ve `GoogleService-Info.plist` (iOS) dosyalarını Firebase Console'dan indirip ilgili dizinlere eklemeniz gerekiyor. Mapbox erişim token'ını da `android/local.properties` içine tanımlayın.
+# Firebase yapılandırmasını ekleyin
+# (google-services.json / GoogleService-Info.plist)
 
-```bash
+# Mapbox erişim anahtarınızı ekleyin
+# (lib/config/ dizininde ilgili yapılandırma dosyasına)
+
+# Uygulamayı çalıştırın
 flutter run
 ```
 
----
 
-## Simülasyon Modu
-
-Geliştirme sürecinde gerçek bir GPS hareketi olmadan test edebilmek için `SimulationService` kullanılıyor. `AppConfig` üzerinden açılıp kapatılabiliyor. Test sürecinde kullanıldı.
-
+**Geliştirici:** Tuğba Nur Aslan
+**Danışman:** Öğr. Gör. Muhammed Tekin
